@@ -62,6 +62,40 @@ async def get_book_by_isbn(isbn: str):
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error fetching book data: {str(e)}")
 
+@app.get("/book/search/{title}", response_model=list[Book])
+async def search_book(title: str):
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required")
+
+    #Fetch from Open Library API
+    try:
+        url = f"https://openlibrary.org/api/books?title={title}.json?q={title}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        ##Check if book data exists
+        book_data = data.get("docs", [{}])[0]
+
+        if not book_data:
+            raise HTTPException(status_code=404, detail="Book not found")
+        books5 = []
+        for i in docs[:5]:
+            title = book_data.get("title", "Unknown")
+            authors = book_data.get("authors", [{"name": "Unknown"}])[0]
+            publish_date = parse_date(book_data.get("publish_date", "Unknown"))
+            isbn = book_data.get("isbn", "Unknown")[0]
+
+            books5.append(Book(
+                title=title,
+                author=authors,
+                publish_date=publish_date,
+                isbn=isbn
+            ))
+        return books5
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching book data: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

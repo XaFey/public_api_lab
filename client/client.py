@@ -22,5 +22,15 @@ def get_book(isbn: str):
     except requests.RequestException as e:
         typer.echo(f"Error: Failed to connect to server - {str(e)}")
 
+@app.command()
+def search_book(title:str):
+    """Search for books by title"""
+    try:
+        response = requests.get(f"{BASE_URL}/book/search/{title}")
+        print_requests(response)
+    except requests.RequestException as e:
+        typer.echo(f"Error: Failed to connect to server - {str(e)}")
+
+
 if __name__ == "__main__":
     app()
