@@ -20,6 +20,14 @@ def validate_isbn(isbn: str) -> bool:
     return bool(re.match(ISBN_REGEX, isbn))
 
 def parse_date(date_str) -> str:
+    c_year = datetime.now().year
+    match = re.search(r"(\d{4})", date_str)
+    if not match:
+        raise HTTPException(status_code=400, detail=f"Invalid publish date format: {date_str}")
+
+    year = int(matxh.group(1))
+    if not (1800 <= year <= c_year):
+        raise HTTPException(status_code=400, detail=f"Invalid publish year: {year}. Must be between 1800 and {c_year}")
     try:
         #Try common date formats
         for ftm in ("%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"):
@@ -31,11 +39,14 @@ def parse_date(date_str) -> str:
     except Exception:
         return date_str
 
+book_cache = {}
+
 @app.get("/book/{isbn}", response_model=Book)
 async def get_book_by_isbn(isbn: str):
     if not validate_isbn(isbn):
         raise HTTPException(status_code=400, detail="Invalid ISBN format (must be 10 or 13 digits)")
-
+    if isbn in book_cache:
+        return True, book_cache[isbn]
     #Fetch from Open Library API
     try:
         url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
@@ -53,12 +64,14 @@ async def get_book_by_isbn(isbn: str):
         authors = book_data.get("authors", [{"name": "Unknown"}])[0]["name"]
         publish_date = parse_date(book_data.get("publish_date", "Unknown"))
 
-        return Book(
+        book =Book(
             title=title,
             author=authors,
             publish_date=publish_date,
             isbn=isbn
         )
+        book_cache[isbn] = book
+        return False, book
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error fetching book data: {str(e)}")
 
@@ -80,6 +93,7 @@ async def search_book(title: str):
         if not book_data:
             raise HTTPException(status_code=404, detail="Book not found")
         books5 = []
+        docs= book_data 
         for i in docs[:5]:
             title = book_data.get("title", "Unknown")
             authors = book_data.get("authors", [{"name": "Unknown"}])[0]
@@ -95,6 +109,45 @@ async def search_book(title: str):
         return books5
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error fetching book data: {str(e)}")
+
+@app.post("/books/bulk/", response_model=list[Book])
+async def bulk_books(isbn: list[str]):
+    if not isbn:
+        raise HTTPException(status_code=400, detail="ISBN list is required")
+    isbns = isbn
+
+    books = []
+    for isbn in isbns:
+        if not validate_isbn(isbn):
+            raise HTTPException(status_code=400, detail=f"Invalid ISBN format: {isbn}")
+
+        try:
+            url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+
+            book_key = f"ISBN:{isbn}"
+            if book_key not in data:
+                continue
+
+            book_data = data[book_key]
+            title = book_data.get("title", "Unknown")
+            authors = book_data.get("authors", [{"name": "Unknown"}])[0]["name"]
+            publish_date = parse_date(book_data.get("publish_date", "Unknown"))
+
+            books.append(Book(
+                title=title,
+                author=authors,
+                publish_date=publish_date,
+                isbn=isbn
+            ))
+        except requests.RequestException as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching book data for ISBN {isbn}: {str(e)}")
+
+    return books
+
+
 
 if __name__ == "__main__":
     import uvicorn
