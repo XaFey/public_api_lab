@@ -38,7 +38,7 @@ async def get_book_by_isbn(isbn: str):
 
     #Fetch from Open Library API
     try:
-        url = f"http://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscms=data"
+        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
